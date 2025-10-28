@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingStatus {
+  REQUESTED
+  ASSIGNED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum SenderType {
+  RIDER
+  DRIVER
+  DISPATCHER
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  role      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  driver Driver?
+  rider  Rider?
+}
+
+model Rider {
+  id    String    @id
+  user  User      @relation(fields: [id], references: [id])
+  phone String?
+  bookings Booking[] @relation("RiderBookings")
+}
+
+model Driver {
+  id                 String    @id
+  user               User      @relation(fields: [id], references: [id])
+  isOnline           Boolean   @default(false)
+  vehicleMake        String?
+  vehicleModel       String?
+  vehiclePlate       String?
+  wheelchairCapable  Boolean   @default(false)
+  lastLat            Float?
+  lastLng            Float?
+  docsVerified       Boolean   @default(false)
+  licenseNumber      String?
+  insuranceExpiry    DateTime?
+  wheelchairTraining Boolean   @default(false)
+  phone              String?
+  updatedAt          DateTime  @updatedAt
+  bookings           Booking[] @relation("DriverBookings")
+}
+
+model Booking {
+  id                String        @id @default(cuid())
+  rider             Rider         @relation("RiderBookings", fields: [riderId], references: [id])
+  riderId           String
+  driver            Driver?       @relation("DriverBookings", fields: [driverId], references: [id])
+  driverId          String?
+
+  pickupAddress     String
+  dropoffAddress    String
+  pickupLat         Float?
+  pickupLng         Float?
+  dropoffLat        Float?
+  dropoffLng        Float?
+  pickupTime        DateTime
+
+  requiresWheelchair Boolean       @default(false)
+  specialNotes       String?
+  priceEstimate      Json?
+  paymentIntentId    String?
+  status             BookingStatus @default(REQUESTED)
+  estimatedDistance  Float?
+  estimatedDuration  Float?
+
+  riderPhone         String?
+  driverPhone        String?
+
+  finalFareAmount    Float?
+  finalFareCurrency  String?       @default("GBP")
+
+  pinCode            Int
+  pickupVerified     Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  messages           Message[]
+}
+
+model Message {
+  id        String     @id @default(cuid())
+  booking   Booking    @relation(fields: [bookingId], references: [id])
+  bookingId String
+  sender    SenderType
+  text      String
+  createdAt DateTime   @default(now())
+}
+
+model Settings {
+  id               Int      @id @default(autoincrement())
+  baseFare         Float    @default(6.0)
+  perKm            Float    @default(1.8)
+  wheelchairMult   Float    @default(1.15)
+  provider         String   @default("fallback")
+  requirePickupPin  Boolean  @default(true)
+  sendReceipts      Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+}
