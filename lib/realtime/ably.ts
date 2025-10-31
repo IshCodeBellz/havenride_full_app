@@ -46,8 +46,8 @@ export function getChannel(name: string): any {
   if (!r) {
     // Return a mock channel that does nothing
     return {
-      subscribe: (_: any) => {},
-      unsubscribe: (_: any) => {},
+      subscribe: () => {},
+      unsubscribe: () => {},
       isMock: true,
     } as MockChannel;
   }

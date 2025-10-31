@@ -88,7 +88,7 @@ export default function ChatWidget({
         subscribed = true;
         setRealtimeEnabled(true);
       }
-    } catch (error) {
+    } catch {
       console.warn("Ably subscription failed, falling back to polling");
       setRealtimeEnabled(false);
     }

@@ -2,7 +2,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { SignInButton } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 import CenteredContainer from "@/components/CenteredContainer";
 
 interface HeroProps {
@@ -10,20 +9,6 @@ interface HeroProps {
 }
 
 export default function Hero({ isSignedIn }: HeroProps) {
-  const router = useRouter();
-
-  const handleBookRide = async () => {
-    // Wait a bit for Clerk to complete sign-in, then redirect
-    setTimeout(async () => {
-      try {
-        await fetch("/api/users/ensure-role");
-        router.push("/rider");
-      } catch (error) {
-        console.error("Error:", error);
-      }
-    }, 1000);
-  };
-
   return (
     <section className="w-full bg-gray-50 py-20 lg:py-28">
       <CenteredContainer>

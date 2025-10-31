@@ -1,11 +1,3 @@
 {
-  "/api/bookings/route": "app/api/bookings/route.js",
-  "/api/users/ensure-role/route": "app/api/users/ensure-role/route.js",
-  "/api/users/me/route": "app/api/users/me/route.js",
-  "/rider/page": "app/rider/page.js",
-  "/driver/earnings/page": "app/driver/earnings/page.js",
-  "/driver/past-rides/page": "app/driver/past-rides/page.js",
-  "/rider/past-rides/page": "app/rider/past-rides/page.js",
-  "/driver/page": "app/driver/page.js",
-  "/role-select/page": "app/role-select/page.js"
+  "/api/bookings/route": "app/api/bookings/route.js"
 }

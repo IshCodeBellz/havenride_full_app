@@ -77,7 +77,7 @@ function RiderPageContent() {
         channel.subscribe(handler);
         subscribed = true;
       }
-    } catch (error) {
+    } catch {
       console.warn("Ably subscription failed");
     }
 

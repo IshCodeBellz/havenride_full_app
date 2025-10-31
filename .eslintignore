@@ -1,0 +1,23 @@
+# Build outputs
+.next
+node_modules
+out
+build
+dist
+.cache
+
+# Public assets
+public
+
+# Config files
+*.config.js
+*.config.ts
+next-env.d.ts
+
+# Seed files
+prisma/seed.ts
+next.config.js
+tailwind.config.js
+postcss.config.js
+next-env.d.ts
+prisma/seed.ts

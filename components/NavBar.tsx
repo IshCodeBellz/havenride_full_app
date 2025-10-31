@@ -25,7 +25,9 @@ export default function NavBar() {
           const data = await res.json();
           setRole(data.role || null);
         }
-      } catch {}
+      } catch {
+        // Ignore errors fetching role
+      }
     })();
   }, [isSignedIn]);
 

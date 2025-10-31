@@ -3,10 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import CenteredContainer from "@/components/CenteredContainer";
-import Image from "next/image";
 
 export default function DriverSignupPage() {
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn } = useUser();
   const router = useRouter();
   const [formData, setFormData] = useState({
     fullName: "",

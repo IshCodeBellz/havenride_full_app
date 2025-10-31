@@ -18,6 +18,7 @@ export interface RideDocumentation {
   issuesReported: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default function RideDocumentationForm({
   bookingId,
   onSubmit,
