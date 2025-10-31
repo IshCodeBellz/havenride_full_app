@@ -3,11 +3,13 @@
 This bundle combines all features we've produced: auto-assign, pickup PIN, chat, driver docs gate, dispatcher masked calls, profiles, admin (roles, settings, metrics, ops), earnings, accounting webhooks, receipts, and more.
 
 ## Quick start
+
 1. **Install deps**:
    ```bash
    npm install
    ```
 2. **Environment** – create `.env`:
+
    ```env
    DATABASE_URL=postgresql://user:pass@host:5432/havenride
 
@@ -47,6 +49,7 @@ This bundle combines all features we've produced: auto-assign, pickup PIN, chat,
    # Payout rate (driver earnings)
    DRIVER_PAYOUT_RATE=0.75
    ```
+
 3. **Generate & migrate Prisma**:
    ```bash
    npx prisma generate
@@ -58,12 +61,23 @@ This bundle combines all features we've produced: auto-assign, pickup PIN, chat,
    ```
 
 ## Key routes
+
 - Rider: `/rider`, `/rider/profile`
-- Driver: `/driver`, `/driver/profile`, `/driver/earnings`
+- Driver: `/driver`, `/driver/profile`, `/driver/earnings`, `/driver-signup` (sign up as driver)
 - Dispatcher: `/dispatcher`
-- Admin: `/admin`, `/admin/settings`, `/admin/metrics`, `/admin/ops`
+- Admin: `/admin`, `/admin/settings`, `/admin/metrics`, `/admin/ops`, `/role-select` (admin only)
+
+## Role Assignment 🔐
+
+- **New users**: Auto-assigned `RIDER` role
+- **Drivers**: Sign up via `/driver-signup` → Get `DRIVER` role
+- **Admins**: First admin created manually via SQL (see `FIRST_ADMIN_SETUP.sql`)
+- **Security**: Only admins can assign ADMIN/DISPATCHER roles
+
+For detailed role management, see [`docs/ROLE_SYSTEM_GUIDE.md`](docs/ROLE_SYSTEM_GUIDE.md)
 
 ## Notes
+
 - Realtime uses **Ably**; without keys, UI degrades gracefully (no-op publish/subscribe).
 - Payments: if Stripe is not set, a dummy client secret is used (dev only).
 - Receipts & Accounting fire **best-effort** on completion and won’t block the driver flow.

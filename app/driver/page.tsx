@@ -1,16 +1,25 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
 import { getChannel } from "@/lib/realtime/ably";
 import ChatWidget from "@/components/ChatWidget";
 import RoleGate from "@/components/RoleGate";
+import AppLayout from "@/components/AppLayout";
+import RideDocumentationForm, {
+  RideDocumentation,
+} from "@/components/RideDocumentationForm";
 
 function DriverPageContent() {
   const { user } = useUser();
   const [online, setOnline] = useState(false);
   const [bookings, setBookings] = useState<any[]>([]);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [documentingBookingId, setDocumentingBookingId] = useState<
+    string | null
+  >(null);
+  const fetchingRef = useRef(false);
+  const initialLoadRef = useRef(true);
+
   const assigned = useMemo(
     () =>
       bookings.find((b) => b.driverId === user?.id && b.status !== "COMPLETED"),
@@ -53,28 +62,65 @@ function DriverPageContent() {
     return () => timer && clearInterval(timer);
   }, [online, user?.id]);
 
-  useEffect(() => {
-    fetchBookings();
-    const ch = getChannel(`driver:${user?.id}`) as any;
-    const onMsg = () => fetchBookings();
-    ch?.subscribe?.(onMsg);
-    const timer = setInterval(fetchBookings, 10000);
-    return () => {
-      ch?.unsubscribe?.(onMsg);
-      clearInterval(timer);
-    };
-  }, [user?.id]);
+  // Memoized fetch function to prevent re-creating on every render
+  const fetchBookings = useCallback(async () => {
+    // Prevent concurrent fetches
+    if (fetchingRef.current) return;
 
-  async function fetchBookings() {
-    setLoading(true);
+    fetchingRef.current = true;
     try {
       const res = await fetch("/api/bookings");
       const data = await res.json();
       setBookings(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch bookings:", error);
     } finally {
-      setLoading(false);
+      fetchingRef.current = false;
+      initialLoadRef.current = false;
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    fetchBookings();
+
+    // Set up Ably subscription with error handling
+    let ch: any = null;
+    let subscribed = false;
+    let handler: any = null;
+
+    try {
+      ch = getChannel(`driver:${user.id}`);
+      handler = () => fetchBookings();
+
+      if (ch && !ch.isMock && typeof ch.subscribe === "function") {
+        ch.subscribe(handler);
+        subscribed = true;
+      }
+    } catch (error) {
+      console.warn("Ably subscription failed, using polling fallback");
+    }
+
+    // Polling fallback (only if Ably didn't work, or as backup)
+    const timer = setInterval(fetchBookings, 15000); // Increased to 15 seconds
+
+    return () => {
+      clearInterval(timer);
+      try {
+        if (
+          subscribed &&
+          ch &&
+          handler &&
+          typeof ch.unsubscribe === "function"
+        ) {
+          ch.unsubscribe(handler);
+        }
+      } catch (error) {
+        console.warn("Cleanup error:", error);
+      }
+    };
+  }, [user?.id, fetchBookings]);
 
   async function take(id: string) {
     await fetch(`/api/bookings/${id}/status`, {
@@ -115,12 +161,33 @@ function DriverPageContent() {
         body: JSON.stringify({ amount: Number(input), currency: "GBP" }),
       });
     }
-    await fetch(`/api/bookings/${id}/status`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "COMPLETED" }),
-    });
-    fetchBookings();
+    // Show documentation form instead of completing immediately
+    setDocumentingBookingId(id);
+  }
+
+  async function handleDocumentationSubmit(data: RideDocumentation) {
+    if (!documentingBookingId) return;
+
+    try {
+      const res = await fetch(
+        `/api/bookings/${documentingBookingId}/document`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to document ride");
+      }
+
+      setDocumentingBookingId(null);
+      await fetchBookings();
+    } catch (error) {
+      console.error("Failed to document ride:", error);
+      throw error;
+    }
   }
 
   return (
@@ -137,12 +204,18 @@ function DriverPageContent() {
         </label>
       </div>
 
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            {bookings.map((b: any) => (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-3">
+          {initialLoadRef.current ? (
+            <div className="text-center text-gray-500 py-4">
+              Loading bookings...
+            </div>
+          ) : bookings.length === 0 ? (
+            <div className="text-center text-gray-500 py-4">
+              No bookings yet
+            </div>
+          ) : (
+            bookings.map((b: any) => (
               <div
                 key={b.id}
                 className={`border rounded p-3 ${
@@ -210,18 +283,53 @@ function DriverPageContent() {
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-          <div>
-            {activeBookingId ? (
-              <ChatWidget bookingId={activeBookingId} sender="DRIVER" />
-            ) : (
-              <div className="text-sm text-gray-500 border rounded p-4">
-                Select a booking to open chat.
-              </div>
-            )}
-          </div>
+            ))
+          )}
         </div>
+        <div>
+          {activeBookingId ? (
+            (() => {
+              const activeBooking = bookings.find(
+                (b) => b.id === activeBookingId
+              );
+              const isCompleted =
+                activeBooking?.status === "COMPLETED" ||
+                activeBooking?.status === "CANCELED";
+
+              if (isCompleted) {
+                return (
+                  <div className="text-sm text-gray-500 border rounded p-4 h-80 flex items-center justify-center">
+                    <div className="text-center">
+                      <p className="font-semibold">Chat Closed</p>
+                      <p className="mt-2">This ride has been completed</p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <ChatWidget
+                  key={activeBookingId}
+                  bookingId={activeBookingId}
+                  sender="DRIVER"
+                />
+              );
+            })()
+          ) : (
+            <div className="text-sm text-gray-500 border rounded p-4">
+              Select a booking to open chat.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Ride Documentation Modal */}
+      {documentingBookingId && (
+        <RideDocumentationForm
+          bookingId={documentingBookingId}
+          onSubmit={handleDocumentationSubmit}
+          onCancel={() => setDocumentingBookingId(null)}
+        />
       )}
     </div>
   );
@@ -230,7 +338,9 @@ function DriverPageContent() {
 export default function DriverPage() {
   return (
     <RoleGate requiredRole={["DRIVER"]}>
-      <DriverPageContent />
+      <AppLayout userRole="DRIVER">
+        <DriverPageContent />
+      </AppLayout>
     </RoleGate>
   );
 }

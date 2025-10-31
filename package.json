@@ -6,30 +6,40 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.0.0",
+    "@mapbox/mapbox-gl-geocoder": "^5.1.2",
     "@prisma/client": "^6.18.0",
-    "ably": "^2.4.0",
+    "ably": "^2.14.0",
+    "mapbox-gl": "^3.16.0",
     "next": "^15.0.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "stripe": "^17.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "@next/eslint-plugin-next": "^16.0.1",
     "@tailwindcss/postcss": "^4.1.16",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.21",
-    "eslint": "9.38.0",
+    "eslint": "^9.38.0",
     "eslint-config-next": "16.0.0",
     "postcss": "^8.5.6",
     "prisma": "^6.18.0",
     "tailwindcss": "^4.1.16",
-    "typescript": "^5.6.0"
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

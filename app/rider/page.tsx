@@ -1,15 +1,26 @@
 "use client";
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
 import ChatWidget from "@/components/ChatWidget";
+import MapboxAutocomplete from "@/components/MapboxAutocomplete";
+import BookingMap from "@/components/BookingMap";
+import AppLayout from "@/components/AppLayout";
 import { getChannel } from "@/lib/realtime/ably";
 import RoleGate from "@/components/RoleGate";
 
 function RiderPageContent() {
   const { user } = useUser();
+  const fetchingRef = useRef(false);
   const [pickup, setPickup] = useState("");
+  const [pickupCoords, setPickupCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [dropoff, setDropoff] = useState("");
+  const [dropoffCoords, setDropoffCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [wheelchair, setWheelchair] = useState(false);
   const [estimate, setEstimate] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -19,18 +30,11 @@ function RiderPageContent() {
     null
   );
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchBookings();
-      // Subscribe to real-time updates for all rider bookings
-      const channel = getChannel(`rider:${user.id}`);
-      const handler = () => fetchBookings();
-      (channel as any)?.subscribe?.(handler);
-      return () => (channel as any)?.unsubscribe?.(handler);
-    }
-  }, [user?.id]);
+  // Memoized fetch function to prevent re-creating on every render
+  const fetchBookings = useCallback(async () => {
+    if (fetchingRef.current) return;
 
-  async function fetchBookings() {
+    fetchingRef.current = true;
     try {
       const res = await fetch("/api/bookings");
       const data = await res.json();
@@ -46,20 +50,77 @@ function RiderPageContent() {
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      fetchingRef.current = false;
     }
-  }
+  }, [user?.id, selectedBookingId]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    fetchBookings();
+
+    // Subscribe to real-time updates for all rider bookings
+    let channel: any = null;
+    let subscribed = false;
+    let handler: any = null;
+
+    try {
+      channel = getChannel(`rider:${user.id}`);
+      handler = () => fetchBookings();
+
+      if (
+        channel &&
+        !channel.isMock &&
+        typeof channel.subscribe === "function"
+      ) {
+        channel.subscribe(handler);
+        subscribed = true;
+      }
+    } catch (error) {
+      console.warn("Ably subscription failed");
+    }
+
+    // Add polling fallback to ensure updates even without Ably
+    const timer = setInterval(fetchBookings, 10000); // Poll every 10 seconds
+
+    return () => {
+      clearInterval(timer);
+      try {
+        if (
+          subscribed &&
+          channel &&
+          handler &&
+          typeof channel.unsubscribe === "function"
+        ) {
+          channel.unsubscribe(handler);
+        }
+      } catch (error) {
+        console.warn("Cleanup error:", error);
+      }
+    };
+  }, [user?.id, fetchBookings]);
 
   async function handleEstimate() {
-    if (!pickup || !dropoff) return;
+    if (
+      !pickup ||
+      !dropoff ||
+      !pickupCoords ||
+      !dropoffCoords ||
+      pickupCoords.lat === 0 ||
+      dropoffCoords.lat === 0
+    ) {
+      alert("Please select valid pickup and dropoff locations");
+      return;
+    }
     setLoading(true);
     try {
-      // Mock coordinates - in production, use geocoding API
       const res = await fetch("/api/estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pickup: { lat: 51.5074, lng: -0.1278 },
-          dropoff: { lat: 51.5155, lng: -0.1384 },
+          pickup: pickupCoords,
+          dropoff: dropoffCoords,
           requiresWheelchair: wheelchair,
         }),
       });
@@ -100,10 +161,10 @@ function RiderPageContent() {
           pickupAddress: pickup,
           dropoffAddress: dropoff,
           pickupTime: new Date(),
-          pickupLat: 51.5074,
-          pickupLng: -0.1278,
-          dropoffLat: 51.5155,
-          dropoffLng: -0.1384,
+          pickupLat: pickupCoords?.lat,
+          pickupLng: pickupCoords?.lng,
+          dropoffLat: dropoffCoords?.lat,
+          dropoffLng: dropoffCoords?.lng,
           requiresWheelchair: wheelchair,
           priceEstimate: estimate,
           paymentIntentId: clientSecret,
@@ -114,7 +175,9 @@ function RiderPageContent() {
         const newBooking = await bookingRes.json();
         setBooking(newBooking);
         setPickup("");
+        setPickupCoords(null);
         setDropoff("");
+        setDropoffCoords(null);
         setEstimate(null);
       }
     } catch (e) {
@@ -126,88 +189,113 @@ function RiderPageContent() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Book a Ride</h1>
-        <p className="text-gray-600">Request your accessible ride</p>
+    <div className="px-8 py-6 max-w-7xl mx-auto">
+      {/* Header with Welcome Message */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-[#0F3D3E] mb-2">
+          Welcome, {user?.firstName || "Rider"}
+        </h1>
+        <p className="text-gray-600">Where would you like to go today?</p>
       </div>
 
       {/* Booking Form */}
       {!booking && (
-        <div className="card-white space-y-6">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Pickup Address
-            </label>
-            <input
-              type="text"
-              value={pickup}
-              onChange={(e) => setPickup(e.target.value)}
-              placeholder="Enter pickup location"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm mb-8">
+          <h2 className="text-2xl font-semibold text-[#0F3D3E] mb-6">
+            Where to?
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <MapboxAutocomplete
+                value={pickup}
+                onChange={(address, coords) => {
+                  setPickup(address);
+                  setPickupCoords(coords);
+                }}
+                placeholder="Pickup location"
+                label="Pickup Address"
+                required
+              />
 
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Drop-off Address
-            </label>
-            <input
-              type="text"
-              value={dropoff}
-              onChange={(e) => setDropoff(e.target.value)}
-              placeholder="Enter destination"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400"
-            />
-          </div>
+              <MapboxAutocomplete
+                value={dropoff}
+                onChange={(address, coords) => {
+                  setDropoff(address);
+                  setDropoffCoords(coords);
+                }}
+                placeholder="Enter destination"
+                label="Drop-off Address"
+                required
+              />
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="wheelchair"
-              checked={wheelchair}
-              onChange={(e) => setWheelchair(e.target.checked)}
-              className="w-4 h-4"
-            />
-            <label htmlFor="wheelchair" className="text-sm">
-              Wheelchair accessible vehicle
-            </label>
-          </div>
-
-          <button
-            onClick={handleEstimate}
-            disabled={!pickup || !dropoff || loading}
-            className="w-full btn-primary py-3 disabled:opacity-50"
-          >
-            {loading ? "Estimating..." : "Get Estimate"}
-          </button>
-
-          {estimate && (
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between">
-                <span>Estimated Fare:</span>
-                <span className="font-bold text-lg">
-                  £{estimate.amount.toFixed(2)}
-                </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="wheelchair"
+                  checked={wheelchair}
+                  onChange={(e) => setWheelchair(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="wheelchair" className="text-sm">
+                  Wheelchair accessible vehicle
+                </label>
               </div>
-              <div className="text-sm text-gray-600">
-                Distance: ~{estimate.distanceKm.toFixed(1)} km
-              </div>
+
               <button
-                onClick={handleBook}
-                disabled={loading}
-                className="w-full btn-primary py-3 mt-4"
+                onClick={handleEstimate}
+                disabled={
+                  !pickup ||
+                  !dropoff ||
+                  !pickupCoords ||
+                  !dropoffCoords ||
+                  pickupCoords?.lat === 0 ||
+                  dropoffCoords?.lat === 0 ||
+                  loading
+                }
+                className="w-full bg-[#00796B] text-white py-3 rounded-xl font-semibold hover:bg-[#00796B]/90 transition-colors disabled:opacity-50"
               >
-                {loading ? "Booking..." : "Book Ride"}
+                {loading ? "Estimating..." : "Get Estimate"}
               </button>
+
+              {estimate && (
+                <div className="border-t pt-4 space-y-2">
+                  <div className="flex justify-between">
+                    <span>Estimated Fare:</span>
+                    <span className="font-bold text-lg">
+                      £{estimate.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Distance: ~{estimate.distanceKm.toFixed(1)} km
+                  </div>
+                  <button
+                    onClick={handleBook}
+                    disabled={loading}
+                    className="w-full bg-[#00796B] text-white py-3 rounded-xl font-semibold hover:bg-[#00796B]/90 transition-colors mt-4"
+                  >
+                    {loading ? "Booking..." : "Book Ride"}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Map Preview */}
+            <div className="lg:sticky lg:top-6 self-start">
+              {(pickupCoords || dropoffCoords) && (
+                <BookingMap
+                  pickup={pickupCoords}
+                  dropoff={dropoffCoords}
+                  className="w-[650px] h-[800px]"
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Bookings List */}
       {bookings.length > 0 && (
-        <div className="border-t pt-6 mt-6">
+        <div className="bg-white rounded-2xl p-8 shadow-sm">
           <h2 className="text-xl font-semibold mb-4">My Bookings</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-3">
@@ -243,6 +331,60 @@ function RiderPageContent() {
                   <div className="text-xs text-gray-500">
                     {b.createdAt && new Date(b.createdAt).toLocaleString()}
                   </div>
+                  {b.pinCode &&
+                    b.status !== "COMPLETED" &&
+                    b.status !== "CANCELED" && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                        <div className="text-xs text-blue-600 font-semibold">
+                          Your PIN: <span className="text-lg">{b.pinCode}</span>
+                        </div>
+                        <div className="text-xs text-blue-500 mt-1">
+                          Give this to your driver
+                        </div>
+                      </div>
+                    )}
+                  {b.status === "COMPLETED" && b.rideQuality && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded">
+                      <div className="text-xs font-semibold text-green-800 mb-2">
+                        Driver's Ride Report
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Quality:</span>
+                          <span className="font-medium capitalize">
+                            {b.rideQuality}
+                          </span>
+                          {b.rideQuality === "excellent" && "🌟"}
+                          {b.rideQuality === "good" && "👍"}
+                          {b.rideQuality === "fair" && "👌"}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Comfort:</span>
+                          <span className="font-medium capitalize">
+                            {b.clientComfort.replace("_", " ")}
+                          </span>
+                          {b.clientComfort === "very_comfortable" && "😊"}
+                          {b.clientComfort === "comfortable" && "🙂"}
+                        </div>
+                        {b.accessibilityNotes && (
+                          <div className="mt-2 pt-2 border-t border-green-300">
+                            <span className="text-gray-600">Notes:</span>
+                            <p className="text-gray-700 mt-1">
+                              {b.accessibilityNotes}
+                            </p>
+                          </div>
+                        )}
+                        {b.issuesReported && (
+                          <div className="mt-2 pt-2 border-t border-green-300">
+                            <span className="text-gray-600">Issues:</span>
+                            <p className="text-gray-700 mt-1">
+                              {b.issuesReported}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {b.finalFareAmount && (
                     <div className="text-sm font-semibold mt-2">
                       £{b.finalFareAmount.toFixed(2)}
@@ -253,7 +395,33 @@ function RiderPageContent() {
             </div>
             <div>
               {selectedBookingId ? (
-                <ChatWidget bookingId={selectedBookingId} sender="RIDER" />
+                (() => {
+                  const selectedBooking = bookings.find(
+                    (b) => b.id === selectedBookingId
+                  );
+                  const isCompleted =
+                    selectedBooking?.status === "COMPLETED" ||
+                    selectedBooking?.status === "CANCELED";
+
+                  if (isCompleted) {
+                    return (
+                      <div className="text-sm text-gray-500 border rounded p-4 h-80 flex items-center justify-center">
+                        <div className="text-center">
+                          <p className="font-semibold">Chat Closed</p>
+                          <p className="mt-2">This ride has been completed</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ChatWidget
+                      key={selectedBookingId}
+                      bookingId={selectedBookingId}
+                      sender="RIDER"
+                    />
+                  );
+                })()
               ) : (
                 <div className="text-sm text-gray-500 border rounded p-4 h-80 flex items-center justify-center">
                   Select a booking to view chat
@@ -294,7 +462,7 @@ function RiderPageContent() {
             </div>
           </div>
 
-          <ChatWidget bookingId={booking.id} sender="RIDER" />
+          <ChatWidget key={booking.id} bookingId={booking.id} sender="RIDER" />
 
           <button
             onClick={() => {
@@ -307,12 +475,6 @@ function RiderPageContent() {
           </button>
         </div>
       )}
-
-      <div className="border-t pt-4">
-        <Link href="/" className="text-brand hover:underline">
-          ← Back to Home
-        </Link>
-      </div>
     </div>
   );
 }
@@ -320,7 +482,9 @@ function RiderPageContent() {
 export default function RiderPage() {
   return (
     <RoleGate requiredRole={["RIDER"]}>
-      <RiderPageContent />
+      <AppLayout userRole="RIDER">
+        <RiderPageContent />
+      </AppLayout>
     </RoleGate>
   );
 }

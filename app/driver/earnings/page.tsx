@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import AppLayout from "@/components/AppLayout";
+import RoleGate from "@/components/RoleGate";
 
-export default function DriverEarningsPage() {
+function DriverEarningsContent() {
   const { user } = useUser();
   const [earnings, setEarnings] = useState({
     totalEarnings: 0,
@@ -43,49 +45,61 @@ export default function DriverEarningsPage() {
     }
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">My Earnings</h1>
+    <div className="px-8 py-6 max-w-7xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-[#0F3D3E] mb-2">My Earnings</h1>
         <p className="text-gray-600">View your earnings breakdown</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="border rounded-lg p-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-medium text-gray-600 mb-1">
             Total Earnings
           </h3>
-          <p className="text-3xl font-bold">
+          <p className="text-3xl font-bold text-[#0F3D3E]">
             £{earnings.totalEarnings.toFixed(2)}
           </p>
         </div>
 
-        <div className="border rounded-lg p-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-medium text-gray-600 mb-1">
             Completed Rides
           </h3>
-          <p className="text-3xl font-bold">{earnings.completedRides}</p>
+          <p className="text-3xl font-bold text-[#0F3D3E]">
+            {earnings.completedRides}
+          </p>
         </div>
 
-        <div className="border rounded-lg p-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-medium text-gray-600 mb-1">
             Avg Per Ride
           </h3>
-          <p className="text-3xl font-bold">
+          <p className="text-3xl font-bold text-[#0F3D3E]">
             £{earnings.averagePerRide.toFixed(2)}
           </p>
         </div>
 
-        <div className="border rounded-lg p-6">
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-medium text-gray-600 mb-1">This Week</h3>
-          <p className="text-3xl font-bold">£{earnings.thisWeek.toFixed(2)}</p>
+          <p className="text-3xl font-bold text-[#0F3D3E]">
+            £{earnings.thisWeek.toFixed(2)}
+          </p>
         </div>
       </div>
 
-      <div className="border rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Payout Information</h2>
+      <div className="bg-white rounded-2xl p-6 shadow-sm mt-6">
+        <h2 className="text-xl font-semibold mb-4 text-[#0F3D3E]">
+          Payout Information
+        </h2>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Payout Rate:</span>
@@ -104,5 +118,15 @@ export default function DriverEarningsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DriverEarningsPage() {
+  return (
+    <RoleGate requiredRole={["DRIVER"]}>
+      <AppLayout userRole="DRIVER">
+        <DriverEarningsContent />
+      </AppLayout>
+    </RoleGate>
   );
 }

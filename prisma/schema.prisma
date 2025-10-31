@@ -92,6 +92,14 @@ model Booking {
 
   pinCode            Int
   pickupVerified     Boolean       @default(false)
+  
+  // Ride documentation (filled by driver at completion)
+  rideQuality        String?       // "excellent" | "good" | "fair" | "poor"
+  clientComfort      String?       // "very_comfortable" | "comfortable" | "neutral" | "uncomfortable"
+  accessibilityNotes String?       // Any accessibility-specific notes
+  issuesReported     String?       // Any issues during the ride
+  documentedAt       DateTime?     // When the ride was documented
+  
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

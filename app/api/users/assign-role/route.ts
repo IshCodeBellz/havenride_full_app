@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -12,6 +12,25 @@ export async function POST(req: NextRequest) {
     const { role } = await req.json();
     if (!role || !["RIDER", "DRIVER", "DISPATCHER", "ADMIN"].includes(role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+
+    // Security: Prevent self-assignment of privileged roles
+    if (["ADMIN", "DISPATCHER"].includes(role)) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+
+      // Only existing admins can assign admin/dispatcher roles
+      if (currentUser?.role !== "ADMIN") {
+        return NextResponse.json(
+          {
+            error:
+              "Unauthorized: Only admins can assign ADMIN or DISPATCHER roles",
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Update or create user in database
@@ -27,7 +46,8 @@ export async function POST(req: NextRequest) {
 
     // Update Clerk metadata
     try {
-      await clerkClient.users.updateUser(userId, {
+      const client = await clerkClient();
+      await client.users.updateUser(userId, {
         publicMetadata: { role },
       });
     } catch (e) {

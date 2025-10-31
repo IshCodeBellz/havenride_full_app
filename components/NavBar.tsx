@@ -1,7 +1,9 @@
-'use client';
-import Link from 'next/link';
-import { useUser, SignInButton, UserButton } from '@clerk/nextjs';
-import { useEffect, useState } from 'react';
+"use client";
+import Link from "next/link";
+import Image from "next/image";
+import { useUser, SignInButton, UserButton } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+import CenteredContainer from "./CenteredContainer";
 
 export default function NavBar() {
   const { isSignedIn } = useUser();
@@ -9,8 +11,16 @@ export default function NavBar() {
 
   useEffect(() => {
     (async () => {
+      if (!isSignedIn) {
+        setRole(null);
+        return;
+      }
       try {
-        const res = await fetch('/api/users/me');
+        // Ensure user has a role (auto-assigns RIDER if needed)
+        await fetch("/api/users/ensure-role");
+
+        // Then fetch user data
+        const res = await fetch("/api/users/me");
         if (res.ok) {
           const data = await res.json();
           setRole(data.role || null);
@@ -20,33 +30,87 @@ export default function NavBar() {
   }, [isSignedIn]);
 
   return (
-    <div className="w-full border-b bg-white/70 backdrop-blur sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto p-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/" className="font-bold">HavenRide</Link>
-          <Link href="/role-select" className="text-sm text-gray-700 hover:underline">Role</Link>
-          {role === 'RIDER' && <>
-            <Link href="/rider" className="text-sm text-gray-700 hover:underline">Book</Link>
-            <Link href="/rider/profile" className="text-sm text-gray-700 hover:underline">Profile</Link>
-          </>}
-          {role === 'DRIVER' && <>
-            <Link href="/driver" className="text-sm text-gray-700 hover:underline">Console</Link>
-            <Link href="/driver/earnings" className="text-sm text-gray-700 hover:underline">Earnings</Link>
-            <Link href="/driver/profile" className="text-sm text-gray-700 hover:underline">Profile</Link>
-          </>}
-          {role === 'DISPATCHER' && <>
-            <Link href="/dispatcher" className="text-sm text-gray-700 hover:underline">Dispatcher</Link>
-          </>}
-          {role === 'ADMIN' && <>
-            <Link href="/admin" className="text-sm text-gray-700 hover:underline">Admin</Link>
-            <Link href="/admin/metrics" className="text-sm text-gray-700 hover:underline">Metrics</Link>
-            <Link href="/admin/ops" className="text-sm text-gray-700 hover:underline">Ops</Link>
-          </>}
+    <nav className="w-full bg-white border-b border-gray-100 sticky top-0 z-50">
+      <CenteredContainer className="px-0!">
+        <div className="px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <Image
+              src="/images/HavenRideIcon.png"
+              alt="HavenRide Logo"
+              width={125}
+              height={125}
+              className="md:block"
+            />
+          </Link>
+
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center gap-10 flex-1 justify-center">
+            <Link
+              href="/"
+              className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm"
+            >
+              Home
+            </Link>
+            <Link
+              href="#how-it-works"
+              className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm"
+            >
+              How It Works
+            </Link>
+            <Link
+              href="#accessibility"
+              className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm"
+            >
+              Accessibility
+            </Link>
+            <Link
+              href="#support"
+              className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm"
+            >
+              Support
+            </Link>
+          </div>
+
+          {/* Auth & CTA */}
+          <div className="flex items-center gap-4 shrink-0">
+            {isSignedIn ? (
+              <div className="flex items-center gap-4">
+                {role && (
+                  <Link
+                    href={
+                      role === "RIDER"
+                        ? "/rider"
+                        : role === "DRIVER"
+                        ? "/driver"
+                        : role === "DISPATCHER"
+                        ? "/dispatcher"
+                        : "/admin"
+                    }
+                    className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm"
+                  >
+                    Dashboard
+                  </Link>
+                )}
+                <UserButton afterSignOutUrl="/" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <SignInButton mode="modal" forceRedirectUrl="/auth-callback">
+                  <button className="text-neutral-700 hover:text-[#00796B] font-medium transition-colors text-sm">
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignInButton mode="modal" forceRedirectUrl="/auth-callback">
+                  <button className="bg-[#00796B] text-white px-6 py-3 rounded-2xl font-semibold text-sm hover:bg-[#00796B]/90 transition-colors whitespace-nowrap">
+                    Book a Ride
+                  </button>
+                </SignInButton>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {isSignedIn ? <UserButton afterSignOutUrl="/" /> : <SignInButton />}
-        </div>
-      </div>
-    </div>
+      </CenteredContainer>
+    </nav>
   );
 }
